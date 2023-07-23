@@ -9,9 +9,9 @@
     },
     "api": {
         "type": "openapi",
-        "url": "PLUGIN_HOSTNAME/openapi.yaml"
+        "url": "https://pshastri79.github.io/openapi.yaml"
     },
-    "logo_url": "PLUGIN_HOSTNAME/logo.png",
-    "contact_email": "support@example.com",
+    "logo_url": "https://pshastri79.github.io/logo.png",
+    "contact_email": "priya.shastri@gmail.com",
     "legal_info_url": "https://example.com/legal"
 }
