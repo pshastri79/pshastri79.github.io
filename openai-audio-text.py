@@ -1,10 +1,14 @@
 # Note: you need to be using OpenAI Python v0.27.0 for the code below to work
 import os
 import openai
-from openai import OpenAI
-
-client = OpenAI(api_key=os.getenv("OPEN_API_KEY"))
 import re
+
+openai.api_key = os.getenv("OPENAI_API_KEY")
+openai.organization="org-jDhRxh2NbGke5U3xiiu823zz"
+#from openai import OpenAI
+
+#client = OpenAI(api_key=os.getenv("OPEN_API_KEY"))
+
 # TODO: The 'openai.organization' option isn't read in the client API. You will need to pass it when you instantiate the client, e.g. 'OpenAI(organization="org-jDhRxh2NbGke5U3xiiu823zz")'
 # openai.organization = "org-jDhRxh2NbGke5U3xiiu823zz"
 

@@ -23,7 +23,7 @@ class Createbot():
         
         user_str = []
         assistant_str = []
-        while question!= "END" or question != 'end':
+        while question!="END" or question !='end':
             question=input("")
             
             self.messages.append({'role':'user','content':question})
