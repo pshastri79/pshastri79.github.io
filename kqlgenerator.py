@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 from IPython.display import Markdown, display
 
               
-
+api_key = OPENAI_API_KEY
 if api_key: 
     print("Success!")
 else:
