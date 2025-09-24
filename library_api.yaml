@@ -1,0 +1,925 @@
+openapi: 3.0.3
+info:
+  title: Library Lending API
+  version: "1.0.0"
+  description: >
+    REST API for a library system that manages catalog, physical copies, customers,
+    loans (checkouts/returns), reservations/holds, inventory reporting and basic admin functions.
+servers:
+  - url: https://api.example.com/api/v1
+    description: Production
+  - url: https://staging-api.example.com/api/v1
+    description: Staging
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Catalog
+    description: Book metadata and search
+  - name: Inventory
+    description: Physical copies and inventory management
+  - name: Customers
+    description: Customer accounts and related operations
+  - name: Loans
+    description: Checkout, return and loan management
+  - name: Reservations
+    description: Holds/reservations on books
+  - name: Reports
+    description: Admin reports and metrics
+
+paths:
+  /books:
+    get:
+      tags: [Catalog]
+      summary: List / search books
+      description: Search and list books with pagination, filtering and sorting.
+      parameters:
+        - $ref: '#/components/parameters/query'
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/limit'
+        - name: isbn
+          in: query
+          schema: { type: string }
+        - name: author
+          in: query
+          schema: { type: string }
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: language
+          in: query
+          schema: { type: string }
+        - name: sort
+          in: query
+          schema: { type: string }
+          description: e.g. title.asc, publish_date.desc
+      responses:
+        '200':
+          description: Paginated list of books
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedBooks'
+    post:
+      tags: [Catalog]
+      summary: Create a book record (staff)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookCreate'
+      responses:
+        '201':
+          description: Book created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /books/{bookId}:
+    get:
+      tags: [Catalog]
+      summary: Get book details
+      parameters:
+        - name: bookId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Book detail with copy summary
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BookDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [Catalog]
+      summary: Update book metadata (staff)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: bookId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookUpdate'
+      responses:
+        '200':
+          description: Updated book
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Catalog]
+      summary: Delete book (staff)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: bookId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Deleted
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /books/{bookId}/copies:
+    get:
+      tags: [Catalog]
+      summary: List physical copies for a book
+      parameters:
+        - name: bookId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [AVAILABLE, ON_LOAN, RESERVED, LOST, MAINTENANCE]
+      responses:
+        '200':
+          description: List of physical copies
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PhysicalCopy'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /physical-copies:
+    get:
+      tags: [Inventory]
+      summary: List / filter physical copies
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/limit'
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [AVAILABLE, ON_LOAN, RESERVED, LOST, MAINTENANCE]
+        - name: branch
+          in: query
+          schema: { type: string }
+        - name: bookId
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Paginated copies
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCopies'
+    post:
+      tags: [Inventory]
+      summary: Add a physical copy (staff)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhysicalCopyCreate'
+      responses:
+        '201':
+          description: Copy created
+          headers:
+            Location:
+              description: URL of created copy
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalCopy'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /physical-copies/{copyId}:
+    get:
+      tags: [Inventory]
+      summary: Get physical copy
+      parameters:
+        - name: copyId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Physical copy
+          headers:
+            ETag:
+              description: ETag for optimistic concurrency
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalCopy'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Inventory]
+      summary: Update copy (status, location) (staff)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: copyId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: If-Match
+          in: header
+          required: true
+          schema: { type: string }
+          description: ETag value for optimistic concurrency control
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhysicalCopyUpdate'
+      responses:
+        '200':
+          description: Updated physical copy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhysicalCopy'
+        '412':
+          description: Precondition Failed (ETag mismatch)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Inventory]
+      summary: Remove / retire a copy (staff)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: copyId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Deleted / retired
+
+  /customers:
+    post:
+      tags: [Customers]
+      summary: Create customer account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerCreate'
+      responses:
+        '201':
+          description: Customer created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    get:
+      tags: [Customers]
+      summary: List customers (staff)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/limit'
+        - name: query
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Paginated customers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCustomers'
+
+  /customers/{customerId}:
+    get:
+      tags: [Customers]
+      summary: Get customer profile and active loans/reservations
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Customer detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerDetail'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags: [Customers]
+      summary: Update customer (staff)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerUpdate'
+      responses:
+        '200':
+          description: Updated customer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /customers/{customerId}/loans:
+    get:
+      tags: [Loans]
+      summary: List loans for a customer
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Customer loans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Loan'
+
+  /loans:
+    post:
+      tags: [Loans]
+      summary: Checkout / create a loan (borrow)
+      description: >
+        Creates a loan for a physical copy. Preconditions:
+        copy must be AVAILABLE or RESERVED for this customer; customer must be ACTIVE.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoanCreate'
+      responses:
+        '201':
+          description: Loan created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Loan'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Conflict (copy not available)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      tags: [Loans]
+      summary: List loans (staff)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [ACTIVE, RETURNED, OVERDUE]
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: Loans list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Loan'
+
+  /loans/{loanId}:
+    get:
+      tags: [Loans]
+      summary: Get loan detail
+      parameters:
+        - name: loanId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Loan object
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Loan'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /loans/{loanId}/return:
+    patch:
+      tags: [Loans]
+      summary: Return a borrowed copy (mark loan as returned)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                returned_at: { type: string, format: date-time }
+                condition: { type: string }
+              required: [returned_at]
+      responses:
+        '200':
+          description: Loan returned and copy status updated; fines computed if any
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Loan'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /reservations:
+    post:
+      tags: [Reservations]
+      summary: Place a reservation / hold on a book
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservationCreate'
+      responses:
+        '201':
+          description: Reservation created (or immediately fulfilled)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+    get:
+      tags: [Reservations]
+      summary: List reservations (staff)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/limit'
+      responses:
+        '200':
+          description: Paginated reservations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Reservation'
+
+  /reservations/{reservationId}:
+    get:
+      tags: [Reservations]
+      summary: Get reservation detail
+      parameters:
+        - name: reservationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Reservation object
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Reservations]
+      summary: Cancel a reservation
+      parameters:
+        - name: reservationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Cancelled
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /reports/overdue:
+    get:
+      tags: [Reports]
+      summary: Overdue loans report (staff)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: branch
+          in: query
+          schema: { type: string }
+        - name: days
+          in: query
+          schema: { type: integer, default: 30 }
+      responses:
+        '200':
+          description: Overdue loans
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Loan'
+
+  /metrics/inventory:
+    get:
+      tags: [Reports]
+      summary: Inventory summary
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Inventory metrics (counts per status, per branch)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total_copies: { type: integer }
+                  available: { type: integer }
+                  on_loan: { type: integer }
+                  reserved: { type: integer }
+                  lost: { type: integer }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+      description: Page number (1-based)
+    limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        default: 20
+      description: Number of items per page
+    query:
+      name: query
+      in: query
+      schema:
+        type: string
+      description: Full-text search query
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    # Basic reusable types
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          example: COPY_NOT_AVAILABLE
+        message:
+          type: string
+          example: "Copy with barcode C-000123 is currently ON_LOAN"
+        details:
+          type: object
+          additionalProperties: true
+
+    # Book models
+    Book:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        isbn: { type: string }
+        title: { type: string }
+        subtitle: { type: string, nullable: true }
+        publisher: { type: string, nullable: true }
+        publish_date: { type: string, format: date, nullable: true }
+        description: { type: string, nullable: true }
+        language: { type: string, nullable: true }
+        authors:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+        categories:
+          type: array
+          items: { type: string }
+        total_copies: { type: integer }
+        available_copies: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    BookCreate:
+      type: object
+      required: [title]
+      properties:
+        isbn: { type: string }
+        title: { type: string }
+        subtitle: { type: string }
+        publisher: { type: string }
+        publish_date: { type: string, format: date }
+        description: { type: string }
+        language: { type: string }
+        authors:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+        categories:
+          type: array
+          items: { type: string }
+    BookUpdate:
+      type: object
+      properties:
+        isbn: { type: string }
+        title: { type: string }
+        subtitle: { type: string }
+        publisher: { type: string }
+        publish_date: { type: string, format: date }
+        description: { type: string }
+        language: { type: string }
+        authors:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+        categories:
+          type: array
+          items: { type: string }
+
+    BookDetail:
+      allOf:
+        - $ref: '#/components/schemas/Book'
+        - type: object
+          properties:
+            copies:
+              type: array
+              items:
+                $ref: '#/components/schemas/PhysicalCopy'
+
+    PaginatedBooks:
+      type: object
+      properties:
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Book'
+
+    # Physical copy / inventory
+    PhysicalCopy:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        book_id: { type: string, format: uuid }
+        barcode: { type: string }
+        location: { type: string }
+        branch: { type: string }
+        status:
+          type: string
+          enum: [AVAILABLE, ON_LOAN, RESERVED, LOST, MAINTENANCE]
+        condition: { type: string }
+        added_at: { type: string, format: date-time }
+        version: { type: integer }
+    PhysicalCopyCreate:
+      type: object
+      required: [book_id, barcode]
+      properties:
+        book_id: { type: string, format: uuid }
+        barcode: { type: string }
+        location: { type: string }
+        branch: { type: string }
+        condition: { type: string }
+    PhysicalCopyUpdate:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [AVAILABLE, ON_LOAN, RESERVED, LOST, MAINTENANCE]
+        location: { type: string }
+        branch: { type: string }
+        condition: { type: string }
+
+    PaginatedCopies:
+      type: object
+      properties:
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PhysicalCopy'
+
+    # Customers
+    Customer:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        external_id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+        address: { type: string }
+        status:
+          type: string
+          enum: [ACTIVE, SUSPENDED]
+        created_at: { type: string, format: date-time }
+    CustomerCreate:
+      type: object
+      required: [name]
+      properties:
+        external_id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+        address: { type: string }
+    CustomerUpdate:
+      type: object
+      properties:
+        external_id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+        address: { type: string }
+        status:
+          type: string
+          enum: [ACTIVE, SUSPENDED]
+
+    CustomerDetail:
+      allOf:
+        - $ref: '#/components/schemas/Customer'
+        - type: object
+          properties:
+            active_loans:
+              type: array
+              items:
+                $ref: '#/components/schemas/Loan'
+            reservations:
+              type: array
+              items:
+                $ref: '#/components/schemas/Reservation'
+
+    PaginatedCustomers:
+      type: object
+      properties:
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Customer'
+
+    # Loan / borrowing
+    Loan:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        copy_id: { type: string, format: uuid }
+        book_id: { type: string, format: uuid }
+        customer_id: { type: string, format: uuid }
+        checkout_at: { type: string, format: date-time }
+        due_at: { type: string, format: date-time }
+        returned_at: { type: string, format: date-time, nullable: true }
+        status:
+          type: string
+          enum: [ACTIVE, RETURNED, OVERDUE]
+        fine_accrued:
+          type: number
+          format: double
+          default: 0.0
+        created_at: { type: string, format: date-time }
+    LoanCreate:
+      type: object
+      required: [copy_id, customer_id]
+      properties:
+        copy_id: { type: string, format: uuid }
+        customer_id: { type: string, format: uuid }
+        due_at: { type: string, format: date-time }
+        metadata:
+          type: object
+          additionalProperties: true
+
+    # Reservations
+    Reservation:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        book_id: { type: string, format: uuid }
+        customer_id: { type: string, format: uuid }
+        placed_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time, nullable: true }
+        status:
+          type: string
+          enum: [ACTIVE, FULFILLED, CANCELLED]
+        position: { type: integer }
+    ReservationCreate:
+      type: object
+      required: [book_id, customer_id]
+      properties:
+        book_id: { type: string, format: uuid }
+        customer_id: { type: string, format: uuid }
+
